@@ -1,0 +1,13 @@
+n_init: 3
+pool_size: 10000
+test_size: 1000
+
+fully_bayesian:
+  warmup_steps: 256 
+  num_samples: 128 
+  thinning: 16
+
+partially_bayesian:
+  n_samples: 20
+  learning_rate: 0.1
+  n_steps: 300

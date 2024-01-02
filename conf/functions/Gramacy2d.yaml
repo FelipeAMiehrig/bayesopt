@@ -1,0 +1,8 @@
+function:
+  _target_: mgp_models.test_functions.Gramacy2d
+  noise_std: 0.2236067
+
+dim: 2
+n_iter: 40
+name: Gramacy2d
+bounds: [[-2, 6],[-2, 6]]

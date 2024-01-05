@@ -149,8 +149,8 @@ def fit_partially_bayesian_mgp_model(
         >>> fit_fully_bayesian_model_nuts(gp)
     """
     model.train()
-    train_y = model.pyro_model.train_Y.repeat(num_samples, 1, 1).squeeze()
 
+    train_y = model.pyro_model.train_Y.repeat(num_samples, 1, 1).squeeze()
     # Do inference with NUTS
     list_dict_prior_samples = [model.pyro_model.sample_prior() for i in range(num_samples)]
     prior_samples = combine_and_concat_tensors(*list_dict_prior_samples)
@@ -158,22 +158,20 @@ def fit_partially_bayesian_mgp_model(
     model.likelihood.train()
     # Use the adam optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Includes GaussianLikelihood parameters
-
     # "Loss" for GPs - the marginal log likelihood
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
     # Set up early stopping parameters
+    batch_size = 1
     best_loss = float('inf')
     patience = 15  # Adjust this value based on your preference
-
+    print("start train loop")
     for i in range(learning_steps):
         # Zero gradients from previous iteration
         optimizer.zero_grad()
-        # Output from model
         output = model(model.pyro_model.train_X)
-        # Calc loss and backprop gradients
-        loss = -mll(output, train_y).sum()
+        loss = -mll(output, train_y).sum() 
         loss.backward()
-        if print_iter:
+        if print_iter or i % 50 == 0:
             print('Iter %d/%d - Loss: %.3f' % (i + 1, learning_steps, loss.item()))
         if i == 0 or loss.item() < best_loss:
             best_loss = loss.item()
@@ -181,10 +179,11 @@ def fit_partially_bayesian_mgp_model(
         else:
             patience_counter += 1
             if patience_counter >= patience:
-                if print_iter:
-                    print(f'Early stopping at iteration {i + 1} with best loss: {best_loss}')
+                #if print_iter:
+                print(f'Early stopping at iteration {i + 1} with best loss: {best_loss}')
                 break
         optimizer.step()
+    print("ended train loop")
         #maybe add likelihoods to the model parameters
     model.eval()
     return mll(output, train_y)

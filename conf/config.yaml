@@ -1,10 +1,10 @@
 defaults:
   - general: general
   - functions: Hartmann
-  - acquisition: QBMGPAcquisitionFunction
+  - acquisition: QBMGP
   - _self_
 hydra:
   sweeper:
     params:
-      functions: Gramacy1d, Gramacy2d, Higdon, Hartmann, Branin
+      functions: Ishigami,Gramacy1d, Higdon, Hartmann, Branin
       acquisition: glob(*)

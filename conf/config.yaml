@@ -2,9 +2,13 @@ defaults:
   - general: general
   - functions: Hartmann
   - acquisition: QBMGP
+  - run: run_0
   - _self_
 hydra:
   sweeper:
     params:
-      functions: Ishigami,Gramacy1d, Higdon, Hartmann, Branin
+      functions: Gramacy2d
+      run: glob(*,exclude=run_0*)
       acquisition: glob(*)
+
+      

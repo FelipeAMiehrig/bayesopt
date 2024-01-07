@@ -42,12 +42,10 @@ def eval_rmse(gp, test_X, test_Y, ll=None, batch_size = 100):
     Returns:
     float: The calculated RMSE.
     """
-    print('trying eval rmse batched')
     total_batches = test_X.size(0) // batch_size
     rmse_accum = 0.0
 
     for i in range(total_batches):
-        print(i)
         start_idx = i * batch_size
         end_idx = start_idx + batch_size
         batch_X = test_X[start_idx:end_idx]
@@ -76,7 +74,7 @@ def eval_rmse(gp, test_X, test_Y, ll=None, batch_size = 100):
 #     return torch.sqrt(torch.mean((Y_hat-test_Y)**2))
 
 
-def eval_nll(gp, test_X, test_Y, ll=None, batch_size = 100):
+def eval_nll(gp, test_X, test_Y, ll=None, batch_size = 100, eps=1e-6):
     """
     Evaluate the Negative Log Likelihood (NLL) for a Gaussian Process model in batches.
 
@@ -92,9 +90,8 @@ def eval_nll(gp, test_X, test_Y, ll=None, batch_size = 100):
     """
     total_batches = test_X.size(0) // batch_size
     nll_accum = 0.0
-    print('trying eval nll batches')
+    Y_full = torch.Tensor()
     for i in range(total_batches):
-        print(i)
         start_idx = i * batch_size
         end_idx = start_idx + batch_size
         batch_X = test_X[start_idx:end_idx]
@@ -102,15 +99,16 @@ def eval_nll(gp, test_X, test_Y, ll=None, batch_size = 100):
 
         posterior = gp.posterior(batch_X, ll=ll)
         Y_hat = posterior.best_mixture_mean if ll is not None else posterior.mixture_mean
+        Y_full = torch.cat((Y_full, Y_hat),0)
         #fix this
-        sigma2 = torch.std(Y_hat).pow(2) 
-        p1 = 0.5 * torch.log(2 * math.pi * sigma2).mul(Y_hat.shape[1])
-        p2 = torch.sub(batch_Y, Y_hat).pow(2).sum().div(2 * sigma2)
-        nll_accum += (p1 + p2).item()
-
+    sigma2 = torch.max(torch.std(Y_full).pow(2), torch.Tensor([eps]))
+    p1 = torch.log(2 * math.pi * sigma2).mul(Y_full.shape[1])
+    p2 = torch.sub(test_Y, Y_full).pow(2).div(sigma2).sum()
+    #nll_accum += (p1 + p2).item()
+    p3 = p1+p2
     # Calculate average NLL over all batches
-    nll = nll_accum 
-    return nll
+    #nll = nll_accum 
+    return 0.5*p3[0]
 
 # def eval_nll(gp, test_X, test_Y, ll=None, variance=1.0):
 #     print('trying eval nll')

@@ -7,8 +7,8 @@ defaults:
 hydra:
   sweeper:
     params:
-      functions: Gramacy2d
+      functions: Higdon, Hartmann, Ishigami
       run: glob(*,exclude=run_0*)
-      acquisition: glob(*)
+      acquisition: SALHellingerMM, SALWassersteinMM, SALKLMM
 
       

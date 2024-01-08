@@ -14,7 +14,7 @@ import time
 def run_experiment(cfg:DictConfig):
 
     tkwargs = {
-    #"device": torch.device("cuda:1" if torch.cuda.is_available() else "cpu"),
+    "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
     "dtype": torch.double,
     }
     print(torch.cuda.is_available() )
@@ -42,7 +42,7 @@ def run_experiment(cfg:DictConfig):
     "pool_size": cfg.general.pool_size,
     "run": cfg.run.num
     },
-      mode='disabled'
+    # mode='disabled'
         )
 
     # only scale when passing to acquisition func
@@ -53,8 +53,9 @@ def run_experiment(cfg:DictConfig):
     #print(X)
     X_scaled = convert_bounds(X, cfg.functions.bounds, cfg.functions.dim)
     Y = synthetic_function(X_scaled).unsqueeze(-1)
-    poolU = get_candidate_pool(dim=cfg.functions.dim, bounds=cfg.functions.bounds, size=cfg.general.pool_size)
-    X_test, Y_test = get_test_set(synthetic_function=synthetic_function, bounds=cfg.functions.bounds, dim=cfg.functions.dim, size=cfg.general.test_size)    
+    poolU = get_candidate_pool(dim=cfg.functions.dim, bounds=cfg.functions.bounds, size=cfg.general.pool_size).to(**tkwargs)
+    X_test, Y_test = get_test_set(synthetic_function=synthetic_function, bounds=cfg.functions.bounds, dim=cfg.functions.dim, size=cfg.general.test_size)   
+    X_test, Y_test = X_test.to(**tkwargs), Y_test.to(**tkwargs)
     for i in range(cfg.functions.n_iter):
         print(i)
         train_Y = Y  # Flip the sign since we want to minimize f(x)
@@ -90,7 +91,7 @@ def run_experiment(cfg:DictConfig):
         #print('concated Y')
         rmse = eval_rmse(gp, X_test, Y_test, ll=ll)
         #print('evaled rmse')
-        nll = eval_nll(gp, X_test, Y_test, ll=ll)
+        nll = eval_nll(gp, X_test, Y_test,tkwargs, ll=ll)
         #print('evaled nll')
         wandb.log({"rmse": rmse, "nll": nll})
         #print('evaled logged wandb')

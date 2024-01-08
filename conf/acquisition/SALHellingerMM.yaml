@@ -1,0 +1,3 @@
+function:
+  _target_: mgp_models.acquisition.SALHellingerMMAcquisitionFunction
+name: SALHellingerMM

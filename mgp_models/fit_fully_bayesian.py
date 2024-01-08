@@ -164,14 +164,13 @@ def fit_partially_bayesian_mgp_model(
     batch_size = 1
     best_loss = float('inf')
     patience = 15  # Adjust this value based on your preference
-    print("start train loop")
     for i in range(learning_steps):
         # Zero gradients from previous iteration
         optimizer.zero_grad()
         output = model(model.pyro_model.train_X)
         loss = -mll(output, train_y).sum() 
         loss.backward()
-        if print_iter or i % 50 == 0:
+        if print_iter:
             print('Iter %d/%d - Loss: %.3f' % (i + 1, learning_steps, loss.item()))
         if i == 0 or loss.item() < best_loss:
             best_loss = loss.item()
@@ -183,7 +182,6 @@ def fit_partially_bayesian_mgp_model(
                 print(f'Early stopping at iteration {i + 1} with best loss: {best_loss}')
                 break
         optimizer.step()
-    print("ended train loop")
         #maybe add likelihoods to the model parameters
     model.eval()
     return mll(output, train_y)

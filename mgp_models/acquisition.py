@@ -168,7 +168,7 @@ class SALWassersteinMMAcquisitionFunction(AnalyticAcquisitionFunction):
         return wasserstein.mul(posterior.shaped_weights).sum(dim=MCMC_DIM)
         
 
-class SALKLMMAcquisitionFunction(AnalyticAcquisitionFunction):
+class BALDKLMMAcquisitionFunction(AnalyticAcquisitionFunction):
     def __init__(
         self,
         model: MGPFullyBayesianSingleTaskGP,
@@ -195,8 +195,8 @@ class SALKLMMAcquisitionFunction(AnalyticAcquisitionFunction):
         mu_1 = mixture_mean.repeat(n_models,1,1)
         sigma_2 = posterior.variance
         mu_2 = posterior.mean
-        left = torch.log(torch.sqrt(sigma_1).div(torch.sqrt(sigma_2)))
+        left = torch.log(torch.sqrt(sigma_2).div(torch.sqrt(sigma_1)))
         dif_means = mu_1-mu_2
         up = sigma_1 + dif_means.pow(2)
-        KL = left + up.div(sigma_2) - 0.5
+        KL = left + up.div(2*sigma_2) - 0.5
         return KL.mul(posterior.shaped_weights).sum(dim=MCMC_DIM)

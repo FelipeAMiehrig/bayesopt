@@ -16,8 +16,10 @@ def get_candidate_pool(dim, bounds, size=1000):
     return U
 
 
-def get_test_set(synthetic_function, dim, bounds, size=1000):
-    X_test = torch.rand(size, dim)
+def get_test_set(synthetic_function, dim, bounds, size=1000, seed=0):
+    local_rng = torch.Generator()
+    local_rng.manual_seed(seed)
+    X_test = torch.rand(size, dim, generator=local_rng)
     X_test_scaled = convert_bounds(X_test, bounds, dim)
     Y_test = synthetic_function(X_test_scaled)
     return X_test, Y_test
@@ -136,3 +138,38 @@ def eval_nll(gp, test_X, test_Y, tkwargs, ll=None, batch_size = 100, eps=1e-6):
     #p1 = 0.5*torch.log(2*math.pi*sigma2).sum()
     #p2 = torch.sub(test_Y, Y_hat).pow(2).div(2*sigma2).sum()
     #return p1+p2
+
+
+def eval_mll(gp, test_X, test_Y, tkwargs, ll=None, batch_size = 100, eps=1e-6):
+    """
+    Evaluate the Negative Log Likelihood (NLL) for a Gaussian Process model in batches.
+
+    Parameters:
+    gp (GaussianProcess): The Gaussian Process model.
+    test_X (Tensor): The test inputs.
+    test_Y (Tensor): The test targets.
+    ll (Optional): Log likelihood function. Default is None.
+    variance (float): The variance used in NLL calculation. Default is 1.0.
+
+    Returns:
+    float: The calculated NLL.
+    """
+    total_batches = test_X.size(0) // batch_size
+    Y_full = torch.Tensor().to(**tkwargs)
+    var_full =torch.Tensor().to(**tkwargs)
+    best_gp_index = ll.argmax()
+    noise = gp.likelihood.noise_covar.noise[best_gp_index]
+    noise = torch.max(noise, Tensor([eps]).to(**tkwargs))
+    for i in range(total_batches):
+        start_idx = i * batch_size
+        end_idx = start_idx + batch_size
+        batch_X = test_X[start_idx:end_idx]
+        batch_Y = test_Y[start_idx:end_idx]
+
+        posterior = gp.posterior(batch_X, ll=ll)
+        Y_hat = posterior.best_mixture_mean if ll is not None else posterior.mixture_mean
+        var_hat=  posterior.best_mixture_variance if ll is not None else posterior.mixture_variance
+        Y_full, var_full  = torch.cat((Y_full, Y_hat),0), torch.cat((var_full, var_hat),0)
+    mll_value = 0.5 * ((test_Y - Y_full) ** 2 / noise
+                        + torch.log(2 * torch.pi * noise)).sum()
+    return mll_value

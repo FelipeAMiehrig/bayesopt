@@ -8,7 +8,7 @@ from botorch.models.transforms import Standardize
 from botorch.models.transforms.input import Normalize
 from mgp_models.fully_bayesian import  MGPFullyBayesianSingleTaskGP
 from mgp_models.fit_fully_bayesian import fit_fully_bayesian_mgp_model_nuts, fit_partially_bayesian_mgp_model
-from mgp_models.utils import get_candidate_pool, get_test_set, get_acq_values_pool, eval_nll, eval_rmse, convert_bounds
+from mgp_models.utils import get_candidate_pool, get_test_set, get_acq_values_pool, eval_nll,eval_mll, eval_rmse, convert_bounds
 import time
 @hydra.main(config_path='conf', config_name='config.yaml', version_base=None)
 def run_experiment(cfg:DictConfig):
@@ -26,6 +26,7 @@ def run_experiment(cfg:DictConfig):
     project="bayesopt",
     name= run_name,
     settings=wandb.Settings(start_method="thread"),
+    dir = r"C:\Users\felip\wandb_logs" ,
     # track hyperparameters and run metadata
     config={
     "task": 'AL',
@@ -42,14 +43,14 @@ def run_experiment(cfg:DictConfig):
     "pool_size": cfg.general.pool_size,
     "run": cfg.run.num
     },
-    # mode='disabled'
+    mode='disabled'
         )
 
     # only scale when passing to acquisition func
     synthetic_function = instantiate(cfg.functions.function).to(**tkwargs)
     bounds = synthetic_function.bounds
     #print(bounds)
-    X = SobolEngine(dimension=cfg.functions.dim, scramble=True, seed=0).draw(cfg.general.n_init).to(**tkwargs)
+    X = SobolEngine(dimension=cfg.functions.dim, scramble=True).draw(cfg.general.n_init).to(**tkwargs)
     #print(X)
     X_scaled = convert_bounds(X, cfg.functions.bounds, cfg.functions.dim)
     Y = synthetic_function(X_scaled).unsqueeze(-1)
@@ -92,12 +93,14 @@ def run_experiment(cfg:DictConfig):
         rmse = eval_rmse(gp, X_test, Y_test, ll=ll)
         #print('evaled rmse')
         nll = eval_nll(gp, X_test, Y_test,tkwargs, ll=ll)
+
         #print('evaled nll')
         wandb.log({"rmse": rmse, "nll": nll})
         #print('evaled logged wandb')
         print(f"new nll: {nll}")
-    time.sleep(1)
+
     wandb.finish()
+    torch.cuda.empty_cache()
 if __name__ =='__main__':
     run_experiment()
 # look for some lazy forward 

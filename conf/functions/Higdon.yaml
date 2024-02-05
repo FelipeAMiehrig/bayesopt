@@ -1,8 +1,9 @@
 function:
   _target_: mgp_models.test_functions.Higdon
-  noise_std: 0.3162277
+  noise_std: 0.1
 
 dim: 1
 n_iter: 60
+test_size: 100
 name: Higdon
 bounds: [[0, 20]]

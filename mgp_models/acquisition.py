@@ -117,7 +117,7 @@ class SALHellingerMMAcquisitionFunction(AnalyticAcquisitionFunction):
         mixture_variance = BQBC + var
         sigma_1 = mixture_variance.repeat(n_models,1,1)
         mixture_mean = posterior._mean.sum(dim=MCMC_DIM)
-        mu_1 = mixture_mean.repeat(n_models,1,1)
+        mu_1 = posterior.mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
         sigma_2 = posterior.variance
         mu_2 = posterior.mean
         up = 2*torch.sqrt(sigma_1)*torch.sqrt(sigma_2)
@@ -159,7 +159,7 @@ class SALWassersteinMMAcquisitionFunction(AnalyticAcquisitionFunction):
         mixture_variance = BQBC + var
         sigma_1 = mixture_variance.repeat(n_models,1,1)
         mixture_mean = posterior._mean.sum(dim=MCMC_DIM)
-        mu_1 = mixture_mean.repeat(n_models,1,1)
+        mu_1 = posterior.mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
         sigma_2 = posterior.variance
         mu_2 = posterior.mean
         diff_means = mu_1-mu_2
@@ -192,7 +192,7 @@ class BALDKLMMAcquisitionFunction(AnalyticAcquisitionFunction):
         mixture_variance = BQBC + var
         sigma_1 = mixture_variance.repeat(n_models,1,1)
         mixture_mean = posterior._mean.sum(dim=MCMC_DIM)
-        mu_1 = mixture_mean.repeat(n_models,1,1)
+        mu_1 = posterior.mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
         sigma_2 = posterior.variance
         mu_2 = posterior.mean
         left = torch.log(torch.sqrt(sigma_2).div(torch.sqrt(sigma_1)))

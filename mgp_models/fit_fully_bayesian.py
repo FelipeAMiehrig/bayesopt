@@ -44,7 +44,8 @@ from torch.utils.data import DataLoader
 import gpytorch
 
 from mgp_models.fully_bayesian import MGPFullyBayesianSingleTaskGP
-
+from mgp_models.plots import plot_samples_before_after
+from mgp_models.utils import log_best_params
 import torch
 
 
@@ -122,12 +123,14 @@ def fit_fully_bayesian_mgp_model_nuts(
     model.eval()
 
 def fit_partially_bayesian_mgp_model(
-    model: Union[MGPFullyBayesianSingleTaskGP, SaasFullyBayesianSingleTaskGP, SaasFullyBayesianMultiTaskGP],   #change
-    num_samples: int = 16,
+    model: Union[MGPFullyBayesianSingleTaskGP, SaasFullyBayesianSingleTaskGP, SaasFullyBayesianMultiTaskGP], 
+    num_samples: int = 20,
     lr : float = 0.1,
     learning_steps : int = 10,
+    dict_params =None,
     jit_compile: bool = False,
-    print_iter: bool = False
+    print_iter: bool = False,
+    plot: bool = False
 ) -> Tensor:
     r"""Fit a fully Bayesian model using the No-U-Turn-Sampler (NUTS)
 
@@ -152,12 +155,23 @@ def fit_partially_bayesian_mgp_model(
 
     train_y = model.pyro_model.train_Y.repeat(num_samples, 1, 1).squeeze()
     # Do inference with NUTS
-    list_dict_prior_samples = [model.pyro_model.sample_prior() for i in range(num_samples)]
+    print('dict params')
+    print(dict_params)
+    if dict_params is None:
+        list_dict_prior_samples = [model.pyro_model.sample_prior() for i in range(num_samples)]
+        print(list_dict_prior_samples[0])
+        print(len(list_dict_prior_samples))
+    else:
+        list_dict_prior_samples = [model.pyro_model.sample_prior() for i in range(num_samples-1)]
+        list_dict_prior_samples.append(dict_params)
+        print(len(list_dict_prior_samples))
     prior_samples = combine_and_concat_tensors(*list_dict_prior_samples)
+    print(prior_samples)
     model.load_mcmc_samples(prior_samples)
+
     model.likelihood.train()
     # Use the adam optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Includes GaussianLikelihood parameters
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, foreach=False )  # Includes GaussianLikelihood parameters
     # "Loss" for GPs - the marginal log likelihood
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(model.likelihood, model)
     # Set up early stopping parameters
@@ -183,5 +197,8 @@ def fit_partially_bayesian_mgp_model(
                 break
         optimizer.step()
         #maybe add likelihoods to the model parameters
+    ll = mll(output, train_y)
+    if plot:
+        plot_samples_before_after(prior_samples, model.get_param_dict(),ll)
     model.eval()
-    return mll(output, train_y)
+    return ll

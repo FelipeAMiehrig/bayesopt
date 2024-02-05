@@ -1,0 +1,5 @@
+params:
+  n_samples: 20
+  learning_rate: 0.1
+  n_steps: 300
+name: part_bayesian

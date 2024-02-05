@@ -12,12 +12,12 @@ from mgp_models.utils import get_candidate_pool, get_test_set, get_acq_values_po
 import time
 @hydra.main(config_path='conf', config_name='config.yaml', version_base=None)
 def run_experiment(cfg:DictConfig):
-
+    
+    torch.set_default_dtype(torch.double)
     tkwargs = {
-    "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-    "dtype": torch.double,
+    "device": torch.device("cpu" if torch.cuda.is_available() else "cpu"),
+    "dtype": torch.double
     }
-    print(torch.cuda.is_available() )
     run_name = cfg.functions.name + "_" + cfg.acquisition.name
     print('--------------------------------------------------------------------------------------------------------------------------')
     print(run_name)
@@ -35,6 +35,7 @@ def run_experiment(cfg:DictConfig):
     "n_dim": cfg.functions.dim,
     "n_iter": cfg.functions.n_iter,
     "acquisition": cfg.acquisition.name,
+    "type": cfg.type.name,
     "n_samples": cfg.general.partially_bayesian.n_samples,
     "lr": cfg.general.partially_bayesian.learning_rate,
     "n_steps" : cfg.general.partially_bayesian.n_steps, 
@@ -43,7 +44,7 @@ def run_experiment(cfg:DictConfig):
     "pool_size": cfg.general.pool_size,
     "run": cfg.run.num
     },
-    mode='disabled'
+    #mode='disabled'
         )
 
     # only scale when passing to acquisition func
@@ -55,8 +56,14 @@ def run_experiment(cfg:DictConfig):
     X_scaled = convert_bounds(X, cfg.functions.bounds, cfg.functions.dim)
     Y = synthetic_function(X_scaled).unsqueeze(-1)
     poolU = get_candidate_pool(dim=cfg.functions.dim, bounds=cfg.functions.bounds, size=cfg.general.pool_size).to(**tkwargs)
-    X_test, Y_test = get_test_set(synthetic_function=synthetic_function, bounds=cfg.functions.bounds, dim=cfg.functions.dim, size=cfg.general.test_size)   
+    X_test, Y_test = get_test_set(synthetic_function=synthetic_function, 
+                                  bounds=cfg.functions.bounds, 
+                                  dim=cfg.functions.dim, 
+                                  noise_std=cfg.functions.function.noise_std,
+                                  size=cfg.functions.test_size)  
+     
     X_test, Y_test = X_test.to(**tkwargs), Y_test.to(**tkwargs)
+    log_dict = {}
     for i in range(cfg.functions.n_iter):
         print(i)
         train_Y = Y  # Flip the sign since we want to minimize f(x)
@@ -67,37 +74,50 @@ def run_experiment(cfg:DictConfig):
             #input_transform=Normalize(d=cfg.functions.dim, bounds=bountensor_scaledds),
             outcome_transform=Standardize(m=1)
         )
-        #print("instantiated")
-
-        ll = fit_partially_bayesian_mgp_model(gp,
-                                              cfg.general.partially_bayesian.n_samples,
-                                              cfg.general.partially_bayesian.learning_rate,
-                                              cfg.general.partially_bayesian.n_steps,
-                                              print_iter=False)
+        if cfg.type.name =='part_bayesian':
+            ll = fit_partially_bayesian_mgp_model(gp,
+                                                cfg.general.partially_bayesian.n_samples,
+                                                cfg.general.partially_bayesian.learning_rate,
+                                                cfg.general.partially_bayesian.n_steps,
+                                                print_iter=False)
+        else:
+            ll = fit_fully_bayesian_mgp_model_nuts(gp,
+                                                   warmup_steps=cfg.general.fully_bayesian.warmup_steps,
+                                                   num_samples=cfg.general.fully_bayesian.num_samples,
+                                                   thinning=cfg.general.fully_bayesian.thinning,
+                                                   disable_progbar=False)
         #print("fitted")
         acq_function = instantiate(cfg.acquisition.function, _partial_=True)
         acq_function = acq_function(gp, ll=ll)
         #print('instantiated acquisition func')
-        candidates, acq_values = get_acq_values_pool(acq_function, poolU)
+        candidates, acq_values, poolU = get_acq_values_pool(acq_function, poolU)
+        
         #print('got candidate')
         #print("got candidate acq fucntion values")
         candidates_scaled = convert_bounds(candidates, cfg.functions.bounds, cfg.functions.dim)
         Y_next = synthetic_function(candidates_scaled).unsqueeze(-1)
-        #print('got Y next')
         if cfg.functions.dim ==1:
             Y_next=Y_next.unsqueeze(-1)
+            log_dict["X_1"] = candidates.squeeze().float()
+        else:
+            for xi in range(cfg.functions.dim):
+                log_dict["X_"+str(xi+1)] = candidates.squeeze()[xi].float()
+        log_dict["Y"] = Y_next.float()
+        nmll, rmse = eval_mll(gp, X_test, Y_test, X, train_Y, tkwargs, ll)
         X = torch.cat((X, candidates)).to(**tkwargs)
         #print('concated X')
         Y = torch.cat((Y, Y_next)).to(**tkwargs)
         #print('concated Y')
-        rmse = eval_rmse(gp, X_test, Y_test, ll=ll)
+        #rmse = eval_rmse(gp, X_test, Y_test, tkwargs, ll=ll)
         #print('evaled rmse')
-        nll = eval_nll(gp, X_test, Y_test,tkwargs, ll=ll)
-
+        #nll = eval_nll(gp, X_test, Y_test, train_Y, tkwargs, ll=ll)
         #print('evaled nll')
-        wandb.log({"rmse": rmse, "nll": nll})
+        log_dict.update({"rmse": rmse, "-MLL":nmll})
+        wandb.log(log_dict)
         #print('evaled logged wandb')
-        print(f"new nll: {nll}")
+        #print(f"new nll: {nll}")
+        print(f"new mll: {nmll}")
+        print(f"new rmse: {rmse}")
 
     wandb.finish()
     torch.cuda.empty_cache()

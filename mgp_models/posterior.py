@@ -8,17 +8,19 @@ from botorch.posteriors.gpytorch import GPyTorchPosterior
 from gpytorch.distributions import MultivariateNormal
 from torch import Tensor
 from botorch.posteriors.fully_bayesian import GaussianMixturePosterior, MCMC_DIM
-
+import numpy as np
 
 class WeightedGMPosterior(GaussianMixturePosterior):
 
-    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None) -> None:
+    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None, alpha: int = 1, quantile:int=50) -> None:
         super().__init__(distribution=distribution)
         if ll is not None:
-            weights = ll.exp().detach().squeeze().div(ll.exp().sum())
+            likelihoods = ll.detach().exp()
+            likelihoods[likelihoods < np.percentile(likelihoods, quantile)] = 0
+            weights = likelihoods.pow(alpha).squeeze().div(likelihoods.pow(alpha).sum())
         if ll is None and weights is None:
             n_models = self._mean.shape[MCMC_DIM]
-            weights = torch.ones(n_models).div(n_models)
+            weights = torch.ones(n_models).div(n_models).to('cpu')
         self.weights = weights
         self._weighted_mixture_mean: Optional[Tensor] = None
         self._weighted_variance: Optional[Tensor] = None
@@ -54,7 +56,7 @@ class WeightedGMPosterior(GaussianMixturePosterior):
             argmax_likelihood =self.weights.argmax()
             self._best_mixture_variance = self._variance[argmax_likelihood]
         return self._best_mixture_variance
-    
+    #----take a look at this_____________________________________________________________________________________
     @property
     def BQBC(self) ->Tensor:
         if self._BQBC is None:

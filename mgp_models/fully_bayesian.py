@@ -105,7 +105,7 @@ class MGPPyroModel(PyroModel):
         to the SAAS prior.
         """
         tkwargs = {"dtype": self.train_X.dtype, "device": self.train_X.device}
-        outputscale = self.sample_outputscale(concentration=2.0, rate=0.15, **tkwargs)
+        outputscale = self.sample_outputscale(**tkwargs)
         mean = self.sample_mean(**tkwargs)
         noise = self.sample_noise(**tkwargs)
         lengthscale = self.sample_lengthscale(dim=self.ard_num_dims, **tkwargs)
@@ -118,7 +118,7 @@ class MGPPyroModel(PyroModel):
 
 
     def sample_outputscale(
-        self, concentration: float = 0.0, rate: float = 3, **tkwargs: Any
+        self, concentration: float = 0.0, rate: float = 1, **tkwargs: Any
     ) -> Tensor:
         r"""Sample the outputscale."""
         return pyro.sample(
@@ -139,7 +139,7 @@ class MGPPyroModel(PyroModel):
             "mean",
             pyro.distributions.Normal(
                 torch.tensor(0.0, **tkwargs),
-                torch.tensor(1.0, **tkwargs),
+                torch.tensor(1, **tkwargs),
             ),
         )
 
@@ -153,7 +153,7 @@ class MGPPyroModel(PyroModel):
                 "noise",
                 pyro.distributions.LogNormal(
                     torch.tensor(0.0, **tkwargs),
-                    torch.tensor(3.0, **tkwargs),
+                    torch.tensor(1, **tkwargs),
                 ),
             )
         else:
@@ -161,7 +161,7 @@ class MGPPyroModel(PyroModel):
 
     
     def sample_lengthscale(
-        self, dim: int, alpha: float = 0.1, **tkwargs: Any
+        self, dim: int, alpha: float = 1, **tkwargs: Any
     ) -> Tensor:
         r"""Sample the lengthscale."""
   
@@ -169,7 +169,7 @@ class MGPPyroModel(PyroModel):
             "lengthscale",
             pyro.distributions.LogNormal(
                 torch.zeros(dim, **tkwargs),
-                torch.ones(dim, **tkwargs).mul(3),
+                torch.ones(dim, **tkwargs).mul(alpha),
                 ),
         )
         return lengthscale
@@ -419,6 +419,14 @@ class MGPFullyBayesianSingleTaskGP(ExactGP, BatchedMultiOutputGPyTorchModel):
         super().load_state_dict(state_dict=state_dict, strict=strict)
 
 
+    def get_param_dict(self):
+        param_dict = {
+            "noise": self.likelihood.noise_covar.noise.clone(),
+            "lengthscale": self.covar_module.base_kernel.lengthscale.clone(),
+            "outputscale": self.covar_module.outputscale.clone(),
+            
+        }
+        return param_dict
 
 
     def forward(self, X: Tensor) -> MultivariateNormal:

@@ -118,7 +118,7 @@ class MGPPyroModel(PyroModel):
 
 
     def sample_outputscale(
-        self, concentration: float = 0.0, rate: float = 1, **tkwargs: Any
+        self, concentration: float = 0.0, rate: float = 3, **tkwargs: Any
     ) -> Tensor:
         r"""Sample the outputscale."""
         return pyro.sample(
@@ -139,7 +139,7 @@ class MGPPyroModel(PyroModel):
             "mean",
             pyro.distributions.Normal(
                 torch.tensor(0.0, **tkwargs),
-                torch.tensor(1, **tkwargs),
+                torch.tensor(3, **tkwargs),
             ),
         )
 
@@ -153,7 +153,7 @@ class MGPPyroModel(PyroModel):
                 "noise",
                 pyro.distributions.LogNormal(
                     torch.tensor(0.0, **tkwargs),
-                    torch.tensor(1, **tkwargs),
+                    torch.tensor(3, **tkwargs),
                 ),
             )
         else:
@@ -161,7 +161,7 @@ class MGPPyroModel(PyroModel):
 
     
     def sample_lengthscale(
-        self, dim: int, alpha: float = 1, **tkwargs: Any
+        self, dim: int, alpha: float = 3, **tkwargs: Any
     ) -> Tensor:
         r"""Sample the lengthscale."""
   
@@ -421,10 +421,10 @@ class MGPFullyBayesianSingleTaskGP(ExactGP, BatchedMultiOutputGPyTorchModel):
 
     def get_param_dict(self):
         param_dict = {
-            "noise": self.likelihood.noise_covar.noise.clone(),
-            "lengthscale": self.covar_module.base_kernel.lengthscale.clone(),
-            "outputscale": self.covar_module.outputscale.clone(),
-            
+            "noise": self.likelihood.noise_covar.noise.clone().detach(),
+            "lengthscale": self.covar_module.base_kernel.lengthscale.clone().detach(),
+            "outputscale": self.covar_module.outputscale.clone().detach(),
+            "mean": self.mean_module.constant.clone().detach()
         }
         return param_dict
 

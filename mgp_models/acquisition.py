@@ -111,13 +111,13 @@ class SALHellingerMMAcquisitionFunction(AnalyticAcquisitionFunction):
 
         posterior = self.model.posterior(X, ll= self.ll)
         n_models = posterior._mean.shape[MCMC_DIM]
-        mean_minus_mgpmean = posterior._mean - posterior.mixture_mean.repeat(n_models,1,1)
-        BQBC = mean_minus_mgpmean.pow(2).sum(dim=MCMC_DIM)
-        var = posterior._variance.sum(dim=MCMC_DIM)
+        mean_minus_mgpmean = posterior._mean - posterior.selected_mixture_mean.repeat(n_models,1,1)
+        BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_mask).sum(dim=MCMC_DIM).div(posterior.n_active_models)
+        var = posterior.selected_variance
         mixture_variance = BQBC + var
         sigma_1 = mixture_variance.repeat(n_models,1,1)
         mixture_mean = posterior._mean.sum(dim=MCMC_DIM)
-        mu_1 = posterior.mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
+        mu_1 = posterior.selected_mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
         sigma_2 = posterior.variance
         mu_2 = posterior.mean
         up = 2*torch.sqrt(sigma_1)*torch.sqrt(sigma_2)
@@ -150,16 +150,15 @@ class SALWassersteinMMAcquisitionFunction(AnalyticAcquisitionFunction):
 
     def forward(self, X: Tensor) -> Tensor:
 
-
         posterior = self.model.posterior(X, ll= self.ll)
         n_models = posterior._mean.shape[MCMC_DIM]
-        mean_minus_mgpmean = posterior._mean - posterior.mixture_mean.repeat(n_models,1,1)
-        BQBC = mean_minus_mgpmean.pow(2).sum(dim=MCMC_DIM)
-        var = posterior._variance.sum(dim=MCMC_DIM)
+        mean_minus_mgpmean = posterior._mean - posterior.selected_mixture_mean.repeat(n_models,1,1)
+        BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_mask).sum(dim=MCMC_DIM).div(posterior.n_active_models)
+        var = posterior.selected_variance
         mixture_variance = BQBC + var
         sigma_1 = mixture_variance.repeat(n_models,1,1)
         mixture_mean = posterior._mean.sum(dim=MCMC_DIM)
-        mu_1 = posterior.mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
+        mu_1 = posterior.selected_mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
         sigma_2 = posterior.variance
         mu_2 = posterior.mean
         diff_means = mu_1-mu_2
@@ -186,13 +185,13 @@ class BALDKLMMAcquisitionFunction(AnalyticAcquisitionFunction):
 
         posterior = self.model.posterior(X, ll= self.ll)
         n_models = posterior._mean.shape[MCMC_DIM]
-        mean_minus_mgpmean = posterior._mean - posterior.mixture_mean.repeat(n_models,1,1)
-        BQBC = mean_minus_mgpmean.pow(2).sum(dim=MCMC_DIM)
-        var = posterior._variance.sum(dim=MCMC_DIM)
+        mean_minus_mgpmean = posterior._mean - posterior.selected_mixture_mean.repeat(n_models,1,1)
+        BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_mask).sum(dim=MCMC_DIM).div(posterior.n_active_models)
+        var = posterior.selected_variance
         mixture_variance = BQBC + var
         sigma_1 = mixture_variance.repeat(n_models,1,1)
         mixture_mean = posterior._mean.sum(dim=MCMC_DIM)
-        mu_1 = posterior.mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
+        mu_1 = posterior.selected_mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
         sigma_2 = posterior.variance
         mu_2 = posterior.mean
         left = torch.log(torch.sqrt(sigma_2).div(torch.sqrt(sigma_1)))

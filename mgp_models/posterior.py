@@ -12,24 +12,33 @@ import numpy as np
 
 class WeightedGMPosterior(GaussianMixturePosterior):
 
-    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None, alpha: int = 1, quantile:int=50) -> None:
+    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None, alpha: int = 1, quantile:int=75) -> None:
         super().__init__(distribution=distribution)
         if ll is not None:
             likelihoods = ll.detach().exp()
-            likelihoods[likelihoods < np.percentile(likelihoods, quantile)] = 0
+            percentile = np.percentile(likelihoods, quantile)
+            likelihoods[likelihoods < percentile] = 0
+            mask = likelihoods.clone()
+            mask[mask >= percentile] = 1
             weights = likelihoods.pow(alpha).squeeze().div(likelihoods.pow(alpha).sum())
         if ll is None and weights is None:
             n_models = self._mean.shape[MCMC_DIM]
             weights = torch.ones(n_models).div(n_models).to('cpu')
+            mask = torch.ones(n_models)
         self.weights = weights
         self._weighted_mixture_mean: Optional[Tensor] = None
         self._weighted_variance: Optional[Tensor] = None
         self._best_mixture_mean: Optional[Tensor] = None
         self._best_mixture_variance: Optional[Tensor] = None
+        self._selected_mixture_mean: Optional[Tensor] = None
+        self._selected_variance: Optional[Tensor] = None
         self._BQBC: Optional[Tensor] = None
         self._QBMGP: Optional[Tensor] = None
         self.test_size = self._mean.shape[1]
         self.shaped_weights = weights.repeat(self.test_size, 1).t().unsqueeze(-1)
+        self.shaped_mask = mask.repeat(self.test_size, 1).t().unsqueeze(-1)
+        self.n_active_models = mask.sum()
+
 
     @property
     def weighted_mixture_mean(self) ->Tensor:
@@ -56,17 +65,29 @@ class WeightedGMPosterior(GaussianMixturePosterior):
             argmax_likelihood =self.weights.argmax()
             self._best_mixture_variance = self._variance[argmax_likelihood]
         return self._best_mixture_variance
+    
+    @property
+    def selected_mixture_mean(self) ->Tensor:
+        if self._selected_mixture_mean is None:
+            self._selected_mixture_mean = self._mean.mul(self.shaped_mask).sum(dim=MCMC_DIM).div(self.n_active_models)
+        return self._selected_mixture_mean
+    
+    @property
+    def selected_variance(self) ->Tensor:
+        if self._selected_variance is None:
+            self._selected_variance = self._variance.mul(self.shaped_mask).sum(dim=MCMC_DIM).div(self.n_active_models)
+        return self._selected_variance
     #----take a look at this_____________________________________________________________________________________
     @property
     def BQBC(self) ->Tensor:
         if self._BQBC is None:
             n_models = self._mean.shape[MCMC_DIM]
-            mean_minus_mgpmean = self._mean - self.mixture_mean.repeat(n_models,1,1)
+            mean_minus_mgpmean = self._mean - self.selected_mixture_mean.repeat(n_models,1,1)
             self._BQBC = mean_minus_mgpmean.pow(2).mul(self.shaped_weights).sum(dim=MCMC_DIM)
         return self._BQBC
     
     @property
     def QBMGP(self) ->Tensor:
         if self._QBMGP is None:
-            self._QBMGP = self.BQBC + self.weighted_variance
+            self._QBMGP = self.BQBC + self.selected_variance
         return self._QBMGP

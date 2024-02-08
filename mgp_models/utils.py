@@ -209,7 +209,6 @@ def get_best_model_params(gp, ll=None):
         best_gp_index = 0
     else:
         best_gp_index = ll.argmax()
-        print(best_gp_index)
     dict_params = {}
     dict_params['noise'] = gp.likelihood.noise_covar.noise.clone().detach()[best_gp_index]
     dict_params['lengthscale'] = gp.covar_module.base_kernel.lengthscale.clone().detach()[best_gp_index]
@@ -220,8 +219,6 @@ def get_best_model_params(gp, ll=None):
 def log_best_params(gp, dict_params, index = 0):
     gp.likelihood.noise_covar.noise[index] = reshape_and_detach(target=gp.likelihood.noise_covar.noise[index], 
                                                                 new_value=dict_params['noise'])
-    print('new_noise')
-    print(gp.likelihood.noise_covar.noise[index])
     gp.covar_module.base_kernel.lengthscale[index] = reshape_and_detach(target=gp.covar_module.base_kernel.lengthscale[index], 
                                                                 new_value=dict_params['lengthscale'])
     gp.covar_module.outputscale[index] = reshape_and_detach(target=gp.covar_module.outputscale[index], 

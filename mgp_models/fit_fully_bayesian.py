@@ -155,18 +155,12 @@ def fit_partially_bayesian_mgp_model(
 
     train_y = model.pyro_model.train_Y.repeat(num_samples, 1, 1).squeeze()
     # Do inference with NUTS
-    print('dict params')
-    print(dict_params)
     if dict_params is None:
         list_dict_prior_samples = [model.pyro_model.sample_prior() for i in range(num_samples)]
-        print(list_dict_prior_samples[0])
-        print(len(list_dict_prior_samples))
     else:
         list_dict_prior_samples = [model.pyro_model.sample_prior() for i in range(num_samples-1)]
         list_dict_prior_samples.append(dict_params)
-        print(len(list_dict_prior_samples))
     prior_samples = combine_and_concat_tensors(*list_dict_prior_samples)
-    print(prior_samples)
     model.load_mcmc_samples(prior_samples)
 
     model.likelihood.train()

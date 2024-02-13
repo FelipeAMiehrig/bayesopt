@@ -8,7 +8,7 @@ from botorch.models.transforms import Standardize
 from botorch.models.transforms.input import Normalize
 from mgp_models.fully_bayesian import  MGPFullyBayesianSingleTaskGP
 from mgp_models.fit_fully_bayesian import fit_fully_bayesian_mgp_model_nuts, fit_partially_bayesian_mgp_model
-from mgp_models.utils import get_candidate_pool, get_test_set, get_acq_values_pool, eval_nll,eval_mll, eval_rmse, convert_bounds
+from mgp_models.utils import get_candidate_pool, get_test_set, get_acq_values_pool, eval_nll,eval_mll, eval_rmse, convert_bounds, eval_new_mll
 import time
 @hydra.main(config_path='conf', config_name='config.yaml', version_base=None)
 def run_experiment(cfg:DictConfig):
@@ -89,6 +89,7 @@ def run_experiment(cfg:DictConfig):
         #print("fitted")
         acq_function = instantiate(cfg.acquisition.function, _partial_=True)
         acq_function = acq_function(gp, ll=ll)
+        del gp
         #print('instantiated acquisition func')
         candidates, acq_values, poolU = get_acq_values_pool(acq_function, poolU)
         
@@ -103,7 +104,7 @@ def run_experiment(cfg:DictConfig):
             for xi in range(cfg.functions.dim):
                 log_dict["X_"+str(xi+1)] = candidates.squeeze()[xi].float()
         log_dict["Y"] = Y_next.float()
-        nmll, rmse = eval_mll(gp, X_test, Y_test, X, train_Y, tkwargs, ll)
+        nmll, rmse = eval_new_mll(X_test, Y_test, X, train_Y, tkwargs)#eval_mll(gp, X_test, Y_test, X, train_Y, tkwargs, ll)
         X = torch.cat((X, candidates)).to(**tkwargs)
         #print('concated X')
         Y = torch.cat((Y, Y_next)).to(**tkwargs)

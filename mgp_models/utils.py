@@ -1,10 +1,13 @@
 import torch
 from torch import Tensor
+from scipy import stats
 import math
+import pandas as pd
 from gpytorch.models import ExactGP
 import gpytorch
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from mgp_models.fully_bayesian import reshape_and_detach
+from torch.utils.data import TensorDataset, DataLoader
 
 def convert_bounds(tensor: Tensor, bounds, dim: int)-> Tensor:
     tensor_scaled = tensor.detach().clone()
@@ -180,17 +183,78 @@ class ExactGPModel(ExactGP):
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
+class NewExactGPModel(ExactGP):
+    def __init__(self, train_x, train_y, likelihood, dim, tkwargs):
+        super(NewExactGPModel, self).__init__(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean().to(**tkwargs)
+        self.covar_module = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(ard_num_dims=dim)
+        ).to(**tkwargs)
 
-#---------------------------------------CHECK IF BEING UPDATED
 
-def eval_mll(gp, test_X, test_Y, train_X, train_Y, tkwargs, ll=None):
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
-    dict_params = get_best_model_params(gp, ll=ll)
+
+def eval_new_mll(test_X, test_Y, train_X, train_Y, tkwargs, learning_steps=300, lr=0.1, patience=15):
+
+
     train_x, train_y = None, None # Your training data
     new_likelihood = gpytorch.likelihoods.GaussianLikelihood().to(**tkwargs)
     dim = test_X.size()[1]
 # Given parameters
-    new_model = ExactGPModel(None, None, new_likelihood, dict_params['lengthscales'],
+    new_model = NewExactGPModel(train_X, train_Y.squeeze(), new_likelihood,dim, tkwargs)
+    new_model.train()
+    new_likelihood.train()
+    #new_model.set_train_data(train_X, train_Y.squeeze(), strict=False)
+    optimizer = torch.optim.Adam(new_model.parameters(), lr=lr, foreach=False )  # Includes GaussianLikelihood parameters
+    #mll = get_mll_best_model(gp, best_gp_index, train_X, train_Y, test_X, test_Y)
+    best_loss = float('inf')
+    patience = 15  # Adjust this value based on your preference
+    mll = gpytorch.mlls.ExactMarginalLogLikelihood(new_likelihood, new_model)
+    for i in range(learning_steps):
+        # Zero gradients from previous iteration
+        optimizer.zero_grad()
+        output = new_model(train_X)
+        loss = -mll(output, train_Y.squeeze())
+        loss.backward()
+        #if print_iter:
+        if i == 0 or loss.item() < best_loss:
+            best_loss = loss.item()
+            patience_counter = 0
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                #if print_iter:
+                #print(f'Early stopping at iteration {i + 1} with best loss: {best_loss}')
+                break
+        optimizer.step()
+        #maybe add likelihoods to the model parameters
+    #ll = mll(output, train_Y.squeeze())
+    new_model.eval()
+    new_likelihood.eval()
+    with torch.no_grad(), gpytorch.settings.fast_pred_var():
+        predictions = new_model(test_X)
+        mll = ExactMarginalLogLikelihood(new_likelihood, new_model)
+        test_mll = mll(predictions, test_Y.squeeze())
+        rmse = gpytorch.metrics.mean_squared_error(predictions, test_Y, squared=True)
+    return -test_mll, rmse
+#---------------------------------------CHECK IF BEING UPDATED
+
+def eval_mll(gp, test_X, test_Y, train_X, train_Y, tkwargs, ll=None):
+
+    if ll is not None:
+        dict_params = get_best_model_params(gp, ll=ll)
+    else:
+        dict_params = get_mode_param_dict(gp)
+    train_x, train_y = None, None # Your training data
+    new_likelihood = gpytorch.likelihoods.GaussianLikelihood().to(**tkwargs)
+    dim = test_X.size()[1]
+    print(dict_params)
+# Given parameters
+    new_model = ExactGPModel(None, None, new_likelihood, dict_params['lengthscale'],
                               dict_params['outputscale'], dict_params['noise'], dim, tkwargs)
     new_model.set_train_data(train_X, train_Y.squeeze(), strict=False)
     #mll = get_mll_best_model(gp, best_gp_index, train_X, train_Y, test_X, test_Y)
@@ -204,6 +268,29 @@ def eval_mll(gp, test_X, test_Y, train_X, train_Y, tkwargs, ll=None):
     return -test_mll, rmse
 
 
+def get_mode_param_dict(gp):
+    model_dict = gp.get_param_dict()
+    decomposed_param_dict = {}
+    decomposed_param_dict['noise'] = model_dict['noise'].detach().squeeze().numpy()
+    decomposed_param_dict['outputscale']  = model_dict['outputscale'].detach().squeeze().numpy()
+    for i in range(model_dict['lengthscale'].size()[1]):
+        decomposed_param_dict['legthscale_'+str(i)] = model_dict['lengthscale'][:,i].squeeze().numpy()
+    decomposed_param_dict['mean']  = model_dict['mean'].numpy()
+    df_params = pd.DataFrame(decomposed_param_dict)
+    array_params = df_params.values.T
+    kernel = stats.gaussian_kde(array_params)
+    mode_index = kernel(array_params).argmax()
+    mode_df = df_params.iloc[mode_index]
+    mode_dict = {}
+    lenghtscales = []
+    for i in range(model_dict['lengthscale'].size()[1]):
+        lenghtscales.append(mode_df['legthscale_'+str(i)])
+    mode_dict['lengthscale'] = torch.Tensor([lenghtscales])
+    mode_dict['noise'] = torch.Tensor([mode_df['noise']])
+    mode_dict['outputscale'] = torch.Tensor([mode_df['outputscale']])
+    mode_dict['mean'] = torch.Tensor([mode_df['mean']])
+    return mode_dict
+
 def get_best_model_params(gp, ll=None):
     if ll is None:
         best_gp_index = 0
@@ -215,6 +302,7 @@ def get_best_model_params(gp, ll=None):
     dict_params['outputscale'] = gp.covar_module.outputscale.clone().detach()[best_gp_index].unsqueeze(-1)
     dict_params['mean'] = gp.mean_module.constant.clone().detach()[best_gp_index].unsqueeze(-1)
     return dict_params
+
 
 def log_best_params(gp, dict_params, index = 0):
     gp.likelihood.noise_covar.noise[index] = reshape_and_detach(target=gp.likelihood.noise_covar.noise[index], 

@@ -66,6 +66,7 @@ def run_experiment(cfg:DictConfig):
     log_dict = {}
     for i in range(cfg.functions.n_iter):
         print(i)
+        start_time = time.time()
         train_Y = Y  # Flip the sign since we want to minimize f(x)
         gp = MGPFullyBayesianSingleTaskGP(
             train_X=X, 
@@ -89,6 +90,7 @@ def run_experiment(cfg:DictConfig):
         #print("fitted")
         acq_function = instantiate(cfg.acquisition.function, _partial_=True)
         acq_function = acq_function(gp, ll=ll)
+        end_time = time.time()
         del gp
         #print('instantiated acquisition func')
         candidates, acq_values, poolU = get_acq_values_pool(acq_function, poolU)
@@ -113,7 +115,7 @@ def run_experiment(cfg:DictConfig):
         #print('evaled rmse')
         #nll = eval_nll(gp, X_test, Y_test, train_Y, tkwargs, ll=ll)
         #print('evaled nll')
-        log_dict.update({"rmse": rmse, "-MLL":nmll})
+        log_dict.update({"rmse": rmse, "-MLL":nmll, "iteration_time":end_time-start_time})
         wandb.log(log_dict)
         #print('evaled logged wandb')
         #print(f"new nll: {nll}")

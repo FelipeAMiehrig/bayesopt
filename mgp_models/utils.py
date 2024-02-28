@@ -369,34 +369,35 @@ def normal_to_truncnorm(all_means, all_vars, all_maxs):
     tnorm_var = all_vars*tnorm_var
     return tnorm_mean, tnorm_var
 
-def get_truncated_moments(gp, grid,X, Y, dim, num_optima=3):
-    path = botorch.sampling.pathwise.posterior_samplers.draw_matheron_paths(gp, torch.Size([num_optima]))
-    samples =path(grid)
-    n_models = samples.size()[1]
-    size_grid = grid.size()[0]
-    max_obj = samples.max(dim=2)
-    maximun_index = max_obj[1]
-    maximuns = max_obj[0]
-    X_to_condition_complete = grid[maximun_index]
+def get_truncated_moments(gp, X_to_condition_complete,Y_to_condition_complete, X, Y, X_test, num_optima=3):
+    # path = botorch.sampling.pathwise.posterior_samplers.draw_matheron_paths(gp, torch.Size([num_optima]))
+    # samples =path(grid)
+    n_models = X_to_condition_complete.size()[1]
+    X_test_size = X_test.size()[0]
+    model_dim = X.size()[1]
+    # max_obj = samples.max(dim=2)
+    # maximun_index = max_obj[1]
+    # maximuns = max_obj[0]
+    # X_to_condition_complete = grid[maximun_index]
     list_means, list_variances = [], []
     for index in range(num_optima):
         X_to_condition= X_to_condition_complete[index, :,:].unsqueeze(1)
-        Y_to_condition = maximuns[index].unsqueeze(1)
+        Y_to_condition = Y_to_condition_complete[index]
         X_with_new_max = torch.cat([X.repeat(n_models,1,1), X_to_condition], dim=1)
         Y_with_new_max = torch.cat([Y.repeat(n_models,1,1).squeeze(), Y_to_condition], dim=1)
         batch_gp = BatchGPModel(X_with_new_max,
                 Y_with_new_max,
-                dimensions=dim,
+                dimensions=model_dim,
                 batch_size=n_models)
         batch_gp.load_params(gp.get_param_dict())
         batch_gp.eval()
         batch_gp.likelihood.eval()
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
-            predictions = batch_gp.likelihood(batch_gp(grid))
+            predictions = batch_gp.likelihood(batch_gp(X_test))
             list_means.append(predictions.mean.unsqueeze(-1))
             list_variances.append(predictions.variance.unsqueeze(-1))
     all_means = torch.cat(list_means, -1).swapaxes(-1,1)
     all_vars = torch.cat(list_variances, -1).swapaxes(-1,1)
-    all_maxs = maximuns.unsqueeze(-1).repeat(1,1,size_grid).detach().swapaxes(0,1)
+    all_maxs = Y_to_condition_complete.repeat(1,1,X_test_size).detach().swapaxes(0,1)
     tnorm_mean, tnorm_var = normal_to_truncnorm(all_means, all_vars, all_maxs)
     return tnorm_mean.swapaxes(-1,-2), tnorm_var.swapaxes(-1,-2)

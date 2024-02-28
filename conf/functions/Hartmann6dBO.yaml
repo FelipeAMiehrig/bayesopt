@@ -1,0 +1,9 @@
+function:
+  _target_: botorch.test_functions.Hartmann
+  noise_std: 0.5
+
+dim: 6
+n_iter: 60
+test_size: 1000
+name: Hartmann
+bounds: [[0,1], [0,1],[0,1],[0,1],[0,1],[0,1]]

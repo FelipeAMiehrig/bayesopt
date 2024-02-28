@@ -1,5 +1,6 @@
 import torch
 from torch import Tensor
+import botorch
 from scipy import stats
 import math
 import pandas as pd
@@ -291,6 +292,21 @@ def get_mode_param_dict(gp):
     mode_dict['mean'] = torch.Tensor([mode_df['mean']])
     return mode_dict
 
+def get_mode_index(gp):
+    model_dict = gp.get_param_dict()
+    decomposed_param_dict = {}
+    decomposed_param_dict['noise'] = model_dict['noise'].detach().squeeze().numpy()
+    decomposed_param_dict['outputscale']  = model_dict['outputscale'].detach().squeeze().numpy()
+    for i in range(model_dict['lengthscale'].size()[1]):
+        decomposed_param_dict['legthscale_'+str(i)] = model_dict['lengthscale'][:,i].squeeze().numpy()
+    decomposed_param_dict['mean']  = model_dict['mean'].numpy()
+    df_params = pd.DataFrame(decomposed_param_dict)
+    array_params = df_params.values.T
+    kernel = stats.gaussian_kde(array_params)
+    mode_index = kernel(array_params).argmax()
+    return mode_index
+
+
 def get_best_model_params(gp, ll=None):
     if ll is None:
         best_gp_index = 0
@@ -312,3 +328,75 @@ def log_best_params(gp, dict_params, index = 0):
     gp.covar_module.outputscale[index] = reshape_and_detach(target=gp.covar_module.outputscale[index], 
                                                                 new_value=dict_params['outputscale'])
     return gp
+
+class BatchGPModel(gpytorch.models.ExactGP):
+    def __init__(self, train_x, train_y, dimensions,  batch_size):
+        likelihood = gpytorch.likelihoods.GaussianLikelihood(batch_shape=torch.Size([batch_size]))
+        super(BatchGPModel, self).__init__(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean(batch_shape=torch.Size([batch_size]))
+        self.covar_module = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel(ard_num_dims=dimensions, 
+                                       batch_shape=torch.Size([batch_size])),
+            batch_shape=torch.Size([batch_size])
+        )
+    
+    def forward(self, x):
+        # x is expected to be of shape [batch size, number of data points, features]
+        # Ensure that the kernel can handle multidimensional input properly
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+    
+    def load_params(self, param_dict):
+        self.covar_module.base_kernel.lengthscale = param_dict['lengthscale']
+        self.covar_module.outputscale = param_dict['outputscale']
+        self.mean_module.constant = param_dict['mean']
+        self.likelihood.noise_covar.noise = param_dict['noise']
+        
+        
+
+
+def normal_to_truncnorm(all_means, all_vars, all_maxs):
+    #https://en.wikipedia.org/wiki/Truncated_normal_distribution
+    Norm = torch.distributions.normal.Normal(loc=torch.Tensor([0]), scale=torch.Tensor([1]))
+    pdf_betas=Norm.log_prob(all_maxs).exp()
+    cdf_betas = Norm.cdf(all_maxs)
+    tnorm_mean = all_means -torch.sqrt(all_vars)*pdf_betas.div(cdf_betas)
+    right = pdf_betas.div(cdf_betas)
+    right = right.pow(2)
+    left = all_maxs*pdf_betas.div(cdf_betas) 
+    tnorm_var = 1-left-right
+    tnorm_var = all_vars*tnorm_var
+    return tnorm_mean, tnorm_var
+
+def get_truncated_moments(gp, grid,X, Y, dim, num_optima=3):
+    path = botorch.sampling.pathwise.posterior_samplers.draw_matheron_paths(gp, torch.Size([num_optima]))
+    samples =path(grid)
+    n_models = samples.size()[1]
+    size_grid = grid.size()[0]
+    max_obj = samples.max(dim=2)
+    maximun_index = max_obj[1]
+    maximuns = max_obj[0]
+    X_to_condition_complete = grid[maximun_index]
+    list_means, list_variances = [], []
+    for index in range(num_optima):
+        X_to_condition= X_to_condition_complete[index, :,:].unsqueeze(1)
+        Y_to_condition = maximuns[index].unsqueeze(1)
+        X_with_new_max = torch.cat([X.repeat(n_models,1,1), X_to_condition], dim=1)
+        Y_with_new_max = torch.cat([Y.repeat(n_models,1,1).squeeze(), Y_to_condition], dim=1)
+        batch_gp = BatchGPModel(X_with_new_max,
+                Y_with_new_max,
+                dimensions=dim,
+                batch_size=n_models)
+        batch_gp.load_params(gp.get_param_dict())
+        batch_gp.eval()
+        batch_gp.likelihood.eval()
+        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+            predictions = batch_gp.likelihood(batch_gp(grid))
+            list_means.append(predictions.mean.unsqueeze(-1))
+            list_variances.append(predictions.variance.unsqueeze(-1))
+    all_means = torch.cat(list_means, -1).swapaxes(-1,1)
+    all_vars = torch.cat(list_variances, -1).swapaxes(-1,1)
+    all_maxs = maximuns.unsqueeze(-1).repeat(1,1,size_grid).detach().swapaxes(0,1)
+    tnorm_mean, tnorm_var = normal_to_truncnorm(all_means, all_vars, all_maxs)
+    return tnorm_mean.swapaxes(-1,-2), tnorm_var.swapaxes(-1,-2)

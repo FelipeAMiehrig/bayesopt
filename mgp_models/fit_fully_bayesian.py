@@ -117,7 +117,9 @@ def fit_fully_bayesian_mgp_model_nuts(
     )
     for k, v in mcmc_samples.items():
         mcmc_samples[k] = v[::thinning]
-
+    #trying this
+    mcmc_samples["mean"] = torch.zeros(len(mcmc_samples["outputscale"]))
+    print(mcmc_samples)
     # Load the MCMC samples back into the BoTorch model
     model.load_mcmc_samples(mcmc_samples)
     model.eval()
@@ -161,6 +163,7 @@ def fit_partially_bayesian_mgp_model(
         list_dict_prior_samples = [model.pyro_model.sample_prior() for i in range(num_samples-1)]
         list_dict_prior_samples.append(dict_params)
     prior_samples = combine_and_concat_tensors(*list_dict_prior_samples)
+    prior_samples["mean"] = torch.zeros(len(prior_samples["outputscale"]))
     model.load_mcmc_samples(prior_samples)
 
     model.likelihood.train()

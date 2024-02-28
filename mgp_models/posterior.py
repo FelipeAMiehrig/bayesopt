@@ -12,7 +12,7 @@ import numpy as np
 
 class WeightedGMPosterior(GaussianMixturePosterior):
 
-    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None, alpha: int = 1, quantile:int=75) -> None:
+    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None, alpha: int = 1, quantile:int=50) -> None:
         super().__init__(distribution=distribution)
         if ll is not None:
             likelihoods = ll.detach().exp()
@@ -91,3 +91,19 @@ class WeightedGMPosterior(GaussianMixturePosterior):
         if self._QBMGP is None:
             self._QBMGP = self.BQBC + self.selected_variance
         return self._QBMGP
+    
+    def get_marginal_moments(self):
+        n_models = self._mean.shape[MCMC_DIM]
+        mean_minus_mgpmean = self._mean - self.selected_mixture_mean.repeat(n_models,1,1)
+        BQBC = mean_minus_mgpmean.pow(2).mul(self.shaped_mask).sum(dim=MCMC_DIM).div(self.n_active_models)
+        var = self.selected_variance
+        mixture_variance = BQBC + var
+        sigma_1 = mixture_variance.repeat(n_models,1,1)
+        mixture_mean = self._mean.sum(dim=MCMC_DIM)
+        mu_1 = self.selected_mixture_mean.repeat(n_models,1,1) #mixture_mean.repeat(n_models,1,1)
+        return mu_1, sigma_1
+    
+    def get_conditional_moments(self):
+        sigma_2 = self.variance
+        mu_2 = self.mean
+        return mu_2, sigma_2

@@ -135,13 +135,15 @@ class MGPPyroModel(PyroModel):
 
     def sample_mean(self, **tkwargs: Any) -> Tensor:
         r"""Sample the mean constant."""
-        return pyro.sample(
-            "mean",
-            pyro.distributions.Normal(
-                torch.tensor(0.0, **tkwargs),
-                torch.tensor(3, **tkwargs),
-            ),
-        )
+        # return pyro.sample(
+        #     "mean",
+        #     pyro.distributions.Normal(
+        #         torch.tensor(0.0, **tkwargs),
+        #         torch.tensor(3, **tkwargs),
+        #     ),
+        # )
+        mean = torch.tensor(0.0, **tkwargs)
+        return pyro.deterministic("mean", mean)
 
 
 

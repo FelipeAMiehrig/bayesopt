@@ -1,6 +1,7 @@
 function:
   _target_: botorch.test_functions.Branin
   noise_std: 0.5
+  negate: True
 
 dim: 2
 n_iter: 40

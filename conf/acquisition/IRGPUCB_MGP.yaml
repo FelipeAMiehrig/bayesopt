@@ -1,0 +1,3 @@
+function:
+  _target_: mgp_models.acquisition.IRGPUCB_MGP
+name: IRGPUCB_MGP

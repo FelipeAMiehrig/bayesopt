@@ -1,9 +1,11 @@
 function:
   _target_: botorch.test_functions.synthetic.Rosenbrock
   noise_std: 2.5
+  dim: 4
+  negate: True
 
 dim: 4
-n_iter: 40
+n_iter: 150
 test_size: 1000
-name: Rosenbrock4d
+name: Rosenbrock4dBO
 bounds: [[-1.5, 1.5],[-1.5,1.5],[-1.5, 1.5],[-1.5,1.5]]

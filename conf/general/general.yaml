@@ -8,6 +8,6 @@ fully_bayesian:
   thinning: 16
 
 partially_bayesian:
-  n_samples: 20
+  n_samples: 40
   learning_rate: 0.1
-  n_steps: 300
+  n_steps: 100

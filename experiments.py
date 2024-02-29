@@ -2,13 +2,15 @@ from torch.quasirandom import SobolEngine
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 import hydra
+import matplotlib.pyplot as plt
 import torch
+import numpy as np
 import wandb
 from botorch.models.transforms import Standardize
 from botorch.models.transforms.input import Normalize
 from mgp_models.fully_bayesian import  MGPFullyBayesianSingleTaskGP
 from mgp_models.fit_fully_bayesian import fit_fully_bayesian_mgp_model_nuts, fit_partially_bayesian_mgp_model
-from mgp_models.utils import get_candidate_pool, get_test_set, get_acq_values_pool, eval_nll,eval_mll, eval_rmse, convert_bounds, eval_new_mll
+from mgp_models.utils import get_candidate_pool, get_test_set, get_acq_values_pool, eval_nll,eval_mll, eval_rmse, convert_bounds, eval_new_mll, calculate_regret
 import time
 @hydra.main(config_path='conf', config_name='config.yaml', version_base=None)
 def run_experiment(cfg:DictConfig):
@@ -29,7 +31,7 @@ def run_experiment(cfg:DictConfig):
     dir = r"C:\Users\felip\wandb_logs" ,
     # track hyperparameters and run metadata
     config={
-    "task": 'AL',
+    "task": cfg.task.name,
     "type": "partially bayesian",
     "function": cfg.functions.name,
     "n_dim": cfg.functions.dim,
@@ -55,14 +57,20 @@ def run_experiment(cfg:DictConfig):
     #print(X)
     X_scaled = convert_bounds(X, cfg.functions.bounds, cfg.functions.dim)
     Y = synthetic_function(X_scaled).unsqueeze(-1)
+    Y_true = synthetic_function.evaluate_true(X_scaled).unsqueeze(-1)
     poolU = get_candidate_pool(dim=cfg.functions.dim, bounds=cfg.functions.bounds, size=cfg.general.pool_size).to(**tkwargs)
     X_test, Y_test = get_test_set(synthetic_function=synthetic_function, 
                                   bounds=cfg.functions.bounds, 
                                   dim=cfg.functions.dim, 
                                   noise_std=cfg.functions.function.noise_std,
                                   size=cfg.functions.test_size)  
-     
+    results = -synthetic_function.evaluate_true(convert_bounds(poolU, cfg.functions.bounds, cfg.functions.dim))
+    sorted, indices = torch.sort(results, descending=True)
+    plt.hist(sorted[:100].detach().numpy())
+    plt.show()
+    print(torch.max(results))
     X_test, Y_test = X_test.to(**tkwargs), Y_test.to(**tkwargs)
+    cum_regret = 0
     log_dict = {}
     for i in range(cfg.functions.n_iter):
         print(i)
@@ -99,17 +107,26 @@ def run_experiment(cfg:DictConfig):
         #print("got candidate acq fucntion values")
         candidates_scaled = convert_bounds(candidates, cfg.functions.bounds, cfg.functions.dim)
         Y_next = synthetic_function(candidates_scaled).unsqueeze(-1)
+        Y_next_true = synthetic_function.evaluate_true(candidates_scaled).unsqueeze(-1)
         if cfg.functions.dim ==1:
             Y_next=Y_next.unsqueeze(-1)
+            Y_next_true=Y_next.unsqueeze(-1)
             log_dict["X_1"] = candidates.squeeze().float()
         else:
             for xi in range(cfg.functions.dim):
                 log_dict["X_"+str(xi+1)] = candidates.squeeze()[xi].float()
         log_dict["Y"] = Y_next.float()
+        log_dict["Y_true"] = Y_next_true.float()
         nmll, rmse = eval_new_mll(X_test, Y_test, X, train_Y, tkwargs)#eval_mll(gp, X_test, Y_test, X, train_Y, tkwargs, ll)
+        if cfg.task.name == "BO":
+            regret = calculate_regret(Y=Y_true, synthetic_function=synthetic_function, negate=cfg.functions.function.negate, func_name=cfg.functions.name)
+            cum_regret = cum_regret + regret
+            log_dict.update({"regret":regret, "log_regret":np.log(regret), "cum_regret":cum_regret})
+            print(f"new regret: {regret}")
         X = torch.cat((X, candidates)).to(**tkwargs)
         #print('concated X')
         Y = torch.cat((Y, Y_next)).to(**tkwargs)
+        Y_true = torch.cat((Y_true, Y_next_true)).to(**tkwargs)
         #print('concated Y')
         #rmse = eval_rmse(gp, X_test, Y_test, tkwargs, ll=ll)
         #print('evaled rmse')

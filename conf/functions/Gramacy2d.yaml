@@ -1,6 +1,6 @@
 function:
   _target_: mgp_models.test_functions.Gramacy2d
-  noise_std: 0.05
+  noise_std: 2.5
 
 dim: 2
 n_iter: 60

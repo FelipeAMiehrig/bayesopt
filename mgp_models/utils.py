@@ -22,6 +22,8 @@ def get_candidate_pool(dim, bounds, size=1000, seed=0):
     local_rng = torch.Generator()
     local_rng.manual_seed(seed)
     U = torch.rand(size, dim, generator=local_rng)
+    #soboleng = torch.quasirandom.SobolEngine(dimension=dim, seed=seed)
+    #U = soboleng.draw(size)
     #U = convert_bounds(U, bounds, dim)
     return U
 
@@ -306,6 +308,17 @@ def get_mode_index(gp):
     mode_index = kernel(array_params).argmax()
     return mode_index
 
+def calculate_regret(Y, synthetic_function, negate=True, func_name=None):
+    if func_name =="Hartmann4dBO":
+        optimal = -3.135474
+    else:
+        optimal = synthetic_function._optimal_value
+    if negate:
+        optimal = -optimal
+        Y = -Y
+    max_so_far = torch.max(Y)
+    regret = optimal- max_so_far
+    return regret.item()
 
 def get_best_model_params(gp, ll=None):
     if ll is None:

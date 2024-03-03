@@ -32,15 +32,17 @@ def run_experiment(cfg:DictConfig):
     # track hyperparameters and run metadata
     config={
     "task": cfg.task.name,
-    "type": "partially bayesian",
+    "type": cfg.type.name,
     "function": cfg.functions.name,
     "n_dim": cfg.functions.dim,
     "n_iter": cfg.functions.n_iter,
     "acquisition": cfg.acquisition.name,
-    "type": cfg.type.name,
-    "n_samples": cfg.general.partially_bayesian.n_samples,
-    "lr": cfg.general.partially_bayesian.learning_rate,
-    "n_steps" : cfg.general.partially_bayesian.n_steps, 
+    "n_samples_pb": cfg.general.part_bayesian.n_samples,
+    "n_samples_b": cfg.general.fully_bayesian.num_samples,
+    "warmup_steps": cfg.general.fully_bayesian.warmup_steps, 
+    "thinning": cfg.general.fully_bayesian.thinning,
+    "lr": cfg.general.part_bayesian.learning_rate,
+    "n_steps" : cfg.general.part_bayesian.n_steps, 
     "n_init": cfg.general.n_init,
     "test_size": cfg.general.test_size,
     "pool_size": cfg.general.pool_size,
@@ -63,11 +65,12 @@ def run_experiment(cfg:DictConfig):
                                   bounds=cfg.functions.bounds, 
                                   dim=cfg.functions.dim, 
                                   noise_std=cfg.functions.function.noise_std,
-                                  size=cfg.functions.test_size)  
+                                  size=cfg.functions.test_size, 
+                                  eval_true=cfg.general.eval_true)  
     results = -synthetic_function.evaluate_true(convert_bounds(poolU, cfg.functions.bounds, cfg.functions.dim))
     sorted, indices = torch.sort(results, descending=True)
-    plt.hist(sorted[:100].detach().numpy())
-    plt.show()
+    #plt.hist(sorted[:100].detach().numpy())
+    #plt.show()
     print(torch.max(results))
     X_test, Y_test = X_test.to(**tkwargs), Y_test.to(**tkwargs)
     cum_regret = 0
@@ -85,9 +88,9 @@ def run_experiment(cfg:DictConfig):
         )
         if cfg.type.name =='part_bayesian':
             ll = fit_partially_bayesian_mgp_model(gp,
-                                                cfg.general.partially_bayesian.n_samples,
-                                                cfg.general.partially_bayesian.learning_rate,
-                                                cfg.general.partially_bayesian.n_steps,
+                                                cfg.general.part_bayesian.n_samples,
+                                                cfg.general.part_bayesian.learning_rate,
+                                                cfg.general.part_bayesian.n_steps,
                                                 print_iter=False)
         else:
             ll = fit_fully_bayesian_mgp_model_nuts(gp,
@@ -110,14 +113,17 @@ def run_experiment(cfg:DictConfig):
         Y_next_true = synthetic_function.evaluate_true(candidates_scaled).unsqueeze(-1)
         if cfg.functions.dim ==1:
             Y_next=Y_next.unsqueeze(-1)
-            Y_next_true=Y_next.unsqueeze(-1)
+            Y_next_true=Y_next_true.unsqueeze(-1)
             log_dict["X_1"] = candidates.squeeze().float()
         else:
             for xi in range(cfg.functions.dim):
                 log_dict["X_"+str(xi+1)] = candidates.squeeze()[xi].float()
         log_dict["Y"] = Y_next.float()
         log_dict["Y_true"] = Y_next_true.float()
-        nmll, rmse = eval_new_mll(X_test, Y_test, X, train_Y, tkwargs)#eval_mll(gp, X_test, Y_test, X, train_Y, tkwargs, ll)
+        if cfg.general.eval_true:
+            nmll, rmse = eval_new_mll(X_test, Y_test, X, Y_true, tkwargs)#change Y_true to train_Y
+        else:
+            nmll, rmse = eval_new_mll(X_test, Y_test, X, train_Y, tkwargs)#change Y_true to train_Y
         if cfg.task.name == "BO":
             regret = calculate_regret(Y=Y_true, synthetic_function=synthetic_function, negate=cfg.functions.function.negate, func_name=cfg.functions.name)
             cum_regret = cum_regret + regret

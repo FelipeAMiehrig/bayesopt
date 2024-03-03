@@ -1,5 +1,2 @@
-params:
-  warmup_steps: 256 
-  num_samples: 128 
-  thinning: 16
+
 name: bayesian

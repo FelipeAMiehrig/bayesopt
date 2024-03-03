@@ -28,15 +28,15 @@ def get_candidate_pool(dim, bounds, size=1000, seed=0):
     return U
 
 
-def get_test_set(synthetic_function, dim, bounds,noise_std, size=1000, seed=0):
+def get_test_set(synthetic_function, dim, bounds,noise_std, size=1000, eval_true=True, seed=0):
     local_rng = torch.Generator()
     local_rng.manual_seed(seed)
     X_test = torch.rand(size, dim, generator=local_rng)
     X_test_scaled = convert_bounds(X_test, bounds, dim)
     Y_test = synthetic_function.evaluate_true(X_test_scaled)
-
-    noise = torch.normal(0, noise_std, size=(size,1), generator=local_rng).squeeze()
-    Y_test = Y_test+noise
+    if not eval_true:
+        noise = torch.normal(0, noise_std, size=(size,1), generator=local_rng).squeeze()
+        Y_test = Y_test+noise
     return X_test, Y_test
 
 def get_acq_values_pool(acq_function, poolU):

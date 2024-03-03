@@ -1,5 +1,5 @@
 params:
-  n_samples: 80
+  n_samples: 32
   learning_rate: 0.1
   n_steps: 50
 name: part_bayesian

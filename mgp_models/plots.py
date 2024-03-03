@@ -32,8 +32,8 @@ def plot_samples_before_after(samples_before, samples_after, likelihood):
     sns.kdeplot(y=len_after, ax=ax_kdey, fill=True, bw_adjust=0.5, cmap='viridis')
     ax_kdey.get_xaxis().set_visible(False)
     ax_kdey.get_yaxis().set_visible(False)
-    ax_main.set_xlim([-15,15])
-    ax_main.set_ylim([-15,15])   
+    ax_main.set_xlim([-12,10])
+    ax_main.set_ylim([-12,10])   
     # Formatting
     ax_main.grid(False)
     ax_main.set_xlabel('outputscale')

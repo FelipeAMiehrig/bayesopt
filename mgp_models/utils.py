@@ -372,12 +372,14 @@ class BatchGPModel(gpytorch.models.ExactGP):
 def normal_to_truncnorm(all_means, all_vars, all_maxs):
     #https://en.wikipedia.org/wiki/Truncated_normal_distribution
     Norm = torch.distributions.normal.Normal(loc=torch.Tensor([0]), scale=torch.Tensor([1]))
-    pdf_betas=Norm.log_prob(all_maxs).exp()
-    cdf_betas = Norm.cdf(all_maxs)
+    betas = all_maxs - all_means
+    betas = betas/torch.sqrt(all_vars)
+    pdf_betas=Norm.log_prob(betas).exp()
+    cdf_betas = Norm.cdf(betas)
     tnorm_mean = all_means -torch.sqrt(all_vars)*pdf_betas.div(cdf_betas)
     right = pdf_betas.div(cdf_betas)
     right = right.pow(2)
-    left = all_maxs*pdf_betas.div(cdf_betas) 
+    left = betas*pdf_betas.div(cdf_betas) 
     tnorm_var = 1-left-right
     tnorm_var = all_vars*tnorm_var
     return tnorm_mean, tnorm_var

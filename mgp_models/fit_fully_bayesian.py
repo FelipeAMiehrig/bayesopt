@@ -119,7 +119,6 @@ def fit_fully_bayesian_mgp_model_nuts(
         mcmc_samples[k] = v[::thinning]
     #trying this
     mcmc_samples["mean"] = torch.zeros(len(mcmc_samples["outputscale"]))
-    print(mcmc_samples)
     # Load the MCMC samples back into the BoTorch model
     model.load_mcmc_samples(mcmc_samples)
     model.eval()

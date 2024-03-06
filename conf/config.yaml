@@ -10,13 +10,13 @@ defaults:
 
 hydra:
   launcher:
-    n_jobs: 1
+    n_jobs: 5
   sweeper:
     params:
-      functions:  Ishigami
-      run: run_1, run_2, run_3, run_4, run_5
+      functions:  Gramacy1d, Higdon, Gramacy2d, Branin, Hartmann, Ishigami
+      run: run_1, run_2, run_3, run_4, run_5, run_6, run_7, run_8, run_9, run_10
       acquisition: BQBC, QBMGP, BALM, RANDOM, SALHellingerMM, SALWassersteinMM, BALDKLMM
-      type: part_bayesian
+      type: bayesian
       task: AL
 
       

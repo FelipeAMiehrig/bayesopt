@@ -487,7 +487,7 @@ class ScoreBOHellinger(AnalyticAcquisitionFunction):
                                                         X_test=X,
                                                         num_optima=num_optima)
         
-        mean_minus_mgpmean = tnorm_mean - posterior.selected_mixture_mean.unsqueeze(0).repeat(n_models,1,num_optima)
+        mean_minus_mgpmean = posterior._mean.repeat(1,1,num_optima) - posterior.selected_mixture_mean.unsqueeze(0).repeat(n_models,1,num_optima)
         BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_mask.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).div(posterior.n_active_models)
         var = posterior.selected_variance.repeat(1,num_optima)
         mixture_variance = BQBC + var

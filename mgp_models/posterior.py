@@ -89,7 +89,7 @@ class WeightedGMPosterior(GaussianMixturePosterior):
     @property
     def QBMGP(self) ->Tensor:
         if self._QBMGP is None:
-            self._QBMGP = self.BQBC + self.selected_variance
+            self._QBMGP = self.BQBC + self.weighted_variance
         return self._QBMGP
     
     def get_marginal_moments(self):

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import torch
 import numpy as np
 import wandb
+from pyDOE2 import lhs
 from botorch.models.transforms import Standardize
 from botorch.models.transforms.input import Normalize
 from mgp_models.fully_bayesian import  MGPFullyBayesianSingleTaskGP
@@ -23,6 +24,7 @@ def run_experiment(cfg:DictConfig):
     run_name = cfg.functions.name + "_" + cfg.acquisition.name
     print('--------------------------------------------------------------------------------------------------------------------------')
     print(run_name)
+    wandb.login(key="a57a0466fc25b416b4e026ec6970ba6eff09e105")
     wandb.init(
     # set the wandb project where this run will be logged
     project="bayesopt",
@@ -48,14 +50,15 @@ def run_experiment(cfg:DictConfig):
     "pool_size": cfg.general.pool_size,
     "run": cfg.run.num
     },
-    #mode='disabled'
+    mode='disabled'
         )
 
     # only scale when passing to acquisition func
     synthetic_function = instantiate(cfg.functions.function).to(**tkwargs)
     bounds = synthetic_function.bounds
     #print(bounds)
-    X = SobolEngine(dimension=cfg.functions.dim, scramble=True).draw(cfg.general.n_init).to(**tkwargs)
+    #X = SobolEngine(dimension=cfg.functions.dim, scramble=True).draw(cfg.general.n_init).to(**tkwargs)
+    X = torch.from_numpy(np.array(lhs(cfg.functions.dim, samples=cfg.general.n_init, criterion='maximin'))).to(**tkwargs)
     #print(X)
     X_scaled = convert_bounds(X, cfg.functions.bounds, cfg.functions.dim)
     Y = synthetic_function(X_scaled).unsqueeze(-1)
@@ -69,8 +72,8 @@ def run_experiment(cfg:DictConfig):
                                   eval_true=cfg.general.eval_true)  
     results = -synthetic_function.evaluate_true(convert_bounds(poolU, cfg.functions.bounds, cfg.functions.dim))
     sorted, indices = torch.sort(results, descending=True)
-    #plt.hist(sorted[:100].detach().numpy())
-    #plt.show()
+    plt.hist(sorted[:100].detach().numpy())
+    plt.show()
     print(torch.max(results))
     X_test, Y_test = X_test.to(**tkwargs), Y_test.to(**tkwargs)
     cum_regret = 0
@@ -97,7 +100,7 @@ def run_experiment(cfg:DictConfig):
                                                    warmup_steps=cfg.general.fully_bayesian.warmup_steps,
                                                    num_samples=cfg.general.fully_bayesian.num_samples,
                                                    thinning=cfg.general.fully_bayesian.thinning,
-                                                   disable_progbar=False)
+                                                   disable_progbar=True)
         #print("fitted")
         acq_function = instantiate(cfg.acquisition.function, _partial_=True)
         acq_function = acq_function(gp, ll=ll)

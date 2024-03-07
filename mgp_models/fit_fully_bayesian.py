@@ -94,7 +94,6 @@ def fit_fully_bayesian_mgp_model_nuts(
         >>> fit_fully_bayesian_model_nuts(gp)
     """
     model.train()
-
     # Do inference with NUTS
     nuts = NUTS(
         model.pyro_model.sample,
@@ -118,6 +117,7 @@ def fit_fully_bayesian_mgp_model_nuts(
     for k, v in mcmc_samples.items():
         mcmc_samples[k] = v[::thinning]
     #trying this
+
     mcmc_samples["mean"] = torch.zeros(len(mcmc_samples["outputscale"]))
     # Load the MCMC samples back into the BoTorch model
     model.load_mcmc_samples(mcmc_samples)

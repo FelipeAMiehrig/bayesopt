@@ -72,9 +72,9 @@ def run_experiment(cfg:DictConfig):
                                   eval_true=cfg.general.eval_true)  
     results = -synthetic_function.evaluate_true(convert_bounds(poolU, cfg.functions.bounds, cfg.functions.dim))
     sorted, indices = torch.sort(results, descending=True)
-    plt.hist(sorted[:100].detach().numpy())
-    plt.show()
-    print(torch.max(results))
+    #plt.hist(sorted[:100].detach().numpy())
+    #plt.show()
+    #print(torch.max(results))
     X_test, Y_test = X_test.to(**tkwargs), Y_test.to(**tkwargs)
     cum_regret = 0
     log_dict = {}

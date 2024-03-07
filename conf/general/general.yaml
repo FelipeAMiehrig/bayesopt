@@ -5,7 +5,7 @@ eval_true: True
 
 fully_bayesian:
   warmup_steps: 256 
-  num_samples: 128 
+  num_samples: 256
   thinning: 16
 
 part_bayesian:

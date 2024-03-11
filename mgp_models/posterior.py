@@ -12,7 +12,7 @@ import numpy as np
 
 class WeightedGMPosterior(GaussianMixturePosterior):
 
-    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None, alpha: int = 1, quantile:int=50) -> None:
+    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None, alpha: int = 1, quantile:int=75) -> None:
         super().__init__(distribution=distribution)
         if ll is not None:
             likelihoods = ll.detach().exp()
@@ -26,6 +26,7 @@ class WeightedGMPosterior(GaussianMixturePosterior):
             weights = torch.ones(n_models).div(n_models).to('cpu')
             mask = torch.ones(n_models)
         self.weights = weights
+        self.mask = mask
         self._weighted_mixture_mean: Optional[Tensor] = None
         self._weighted_variance: Optional[Tensor] = None
         self._best_mixture_mean: Optional[Tensor] = None

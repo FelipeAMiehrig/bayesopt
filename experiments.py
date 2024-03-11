@@ -123,10 +123,14 @@ def run_experiment(cfg:DictConfig):
                 log_dict["X_"+str(xi+1)] = candidates.squeeze()[xi].float()
         log_dict["Y"] = Y_next.float()
         log_dict["Y_true"] = Y_next_true.float()
-        if cfg.general.eval_true:
-            nmll, rmse = eval_new_mll(X_test, Y_test, X, Y_true, tkwargs)#change Y_true to train_Y
-        else:
-            nmll, rmse = eval_new_mll(X_test, Y_test, X, train_Y, tkwargs)#change Y_true to train_Y
+        if cfg.task.name == "AL":
+            if cfg.general.eval_true:
+                nmll, rmse = eval_new_mll(X_test, Y_test, X, Y_true, tkwargs)#change Y_true to train_Y
+            else:
+                nmll, rmse = eval_new_mll(X_test, Y_test, X, train_Y, tkwargs)#change Y_true to train_Y
+            log_dict.update({"rmse": rmse, "-MLL":nmll})
+            print(f"new mll: {nmll}")
+            print(f"new rmse: {rmse}")
         if cfg.task.name == "BO":
             regret = calculate_regret(Y=Y_true, synthetic_function=synthetic_function, negate=cfg.functions.function.negate, func_name=cfg.functions.name)
             cum_regret = cum_regret + regret
@@ -141,12 +145,11 @@ def run_experiment(cfg:DictConfig):
         #print('evaled rmse')
         #nll = eval_nll(gp, X_test, Y_test, train_Y, tkwargs, ll=ll)
         #print('evaled nll')
-        log_dict.update({"rmse": rmse, "-MLL":nmll, "iteration_time":end_time-start_time})
+        log_dict.update({ "iteration_time":end_time-start_time})
         wandb.log(log_dict)
         #print('evaled logged wandb')
         #print(f"new nll: {nll}")
-        print(f"new mll: {nmll}")
-        print(f"new rmse: {rmse}")
+
 
     wandb.finish()
     torch.cuda.empty_cache()

@@ -276,6 +276,7 @@ class MGPFullyBayesianSingleTaskGP(ExactGP, BatchedMultiOutputGPyTorchModel):
                 forward pass.
             pyro_model: Optional `PyroModel`, defaults to `SaasPyroModel`.
         """
+        self.original_targets=train_Y
         if not (
             train_X.ndim == train_Y.ndim == 2
             and len(train_X) == len(train_Y)

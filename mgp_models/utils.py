@@ -343,8 +343,8 @@ def log_best_params(gp, dict_params, index = 0):
     return gp
 
 class BatchGPModel(gpytorch.models.ExactGP):
-    def __init__(self, train_x, train_y, dimensions,  batch_size):
-        likelihood = gpytorch.likelihoods.GaussianLikelihood(batch_shape=torch.Size([batch_size]))
+    def __init__(self, train_x, train_y, dimensions,  batch_size, likelihood):
+        #likelihood = gpytorch.likelihoods.GaussianLikelihood(batch_shape=torch.Size([batch_size]))
         super(BatchGPModel, self).__init__(train_x, train_y, likelihood)
         self.mean_module = gpytorch.means.ConstantMean(batch_shape=torch.Size([batch_size]))
         self.covar_module = gpytorch.kernels.ScaleKernel(
@@ -361,10 +361,27 @@ class BatchGPModel(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
     
     def load_params(self, param_dict):
+        # self.covar_module.base_kernel.lengthscale = param_dict['lengthscale']
+        # self.covar_module.outputscale = param_dict['outputscale']
+        # self.mean_module.constant = param_dict['mean']
+        # self.likelihood.noise_covar.noise = param_dict['noise']
+        
+        new_state_dict = {}
+        new_state_dict['likelihood.noise_covar.raw_noise'] = param_dict['noise']
+        new_state_dict['mean_module.raw_constant'] = param_dict['mean']
+        new_state_dict['covar_module.raw_outputscale'] = param_dict['outputscale']
+        new_state_dict['covar_module.base_kernel.raw_lengthscale'] = param_dict['lengthscale']
+        self.load_state_dict(new_state_dict)
+
+    def condition_on_data(self, X, y):
+        self.set_train_data(inputs=X, targets=y, strict=False)
+        
+    def load_params_new(self, param_dict):
         self.covar_module.base_kernel.lengthscale = param_dict['lengthscale']
         self.covar_module.outputscale = param_dict['outputscale']
         self.mean_module.constant = param_dict['mean']
         self.likelihood.noise_covar.noise = param_dict['noise']
+
         
         
 
@@ -400,17 +417,25 @@ def get_truncated_moments(gp, X_to_condition_complete,Y_to_condition_complete, X
         Y_to_condition = Y_to_condition_complete[index]
         X_with_new_max = torch.cat([X.repeat(n_models,1,1), X_to_condition], dim=1)
         Y_with_new_max = torch.cat([Y.repeat(n_models,1,1).squeeze(), Y_to_condition], dim=1)
-        batch_gp = BatchGPModel(X_with_new_max,
-                Y_with_new_max,
+        Y_with_new_max, _ = gp.outcome_transform(Y_with_new_max, None)
+        batch_gp = BatchGPModel(None,
+                None,
                 dimensions=model_dim,
-                batch_size=n_models)
-        batch_gp.load_params(gp.get_param_dict())
+                batch_size=n_models, 
+                likelihood = gp.likelihood)
+        #batch_gp.load_params(gp.get_param_dict())
+        batch_gp.condition_on_data(X_with_new_max, Y_with_new_max)
+        batch_gp.load_params_new(gp.get_param_dict())
         batch_gp.eval()
         batch_gp.likelihood.eval()
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
             predictions = batch_gp.likelihood(batch_gp(X_test))
-            list_means.append(predictions.mean.unsqueeze(-1))
-            list_variances.append(predictions.variance.unsqueeze(-1))
+            means, vars = gp.outcome_transform.untransform(predictions.mean,predictions.variance)
+                        
+            list_means.append(means.unsqueeze(-1))
+            list_variances.append(vars.unsqueeze(-1))
+            #list_means.append(predictions.mean.unsqueeze(-1))
+            #list_variances.append(predictions.variance.unsqueeze(-1))
     all_means = torch.cat(list_means, -1).swapaxes(-1,1)
     all_vars = torch.cat(list_variances, -1).swapaxes(-1,1)
     all_maxs = Y_to_condition_complete.repeat(1,1,X_test_size).detach().swapaxes(0,1)

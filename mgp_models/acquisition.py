@@ -511,6 +511,7 @@ class IRGPUCB_Hellinger(AnalyticAcquisitionFunction):
         return mu + torch.sqrt(xi_t)*distance
 
     
+
 class ScoreBOHellinger(AnalyticAcquisitionFunction):
     def __init__(
         self,
@@ -529,24 +530,21 @@ class ScoreBOHellinger(AnalyticAcquisitionFunction):
         model_dim = self.model.train_inputs[0].size()[1]
         bounds = torch.tensor([[0],[1]]).repeat(1,model_dim)
         opt_inputs, opt_outputs = get_optimal_samples(model=self.model,bounds=bounds, num_optima=num_optima)
-
         posterior = self.model.posterior(X, ll= self.ll)
         n_models = posterior._mean.shape[MCMC_DIM]
-
         tnorm_mean, tnorm_var = get_truncated_moments(gp=self.model,
                                                         X_to_condition_complete=opt_inputs,
                                                         Y_to_condition_complete=opt_outputs,
                                                         X=self.model.train_inputs[0],
-                                                        Y=self.model.train_targets,
+                                                        Y=self.model.original_targets,
                                                         X_test=X,
                                                         num_optima=num_optima)
-        
         mean_minus_mgpmean = posterior._mean.repeat(1,1,num_optima) - posterior.selected_mixture_mean.unsqueeze(0).repeat(n_models,1,num_optima)
-        BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_mask.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).div(posterior.n_active_models)
-        var = posterior.selected_variance.repeat(1,num_optima)
+        BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_weights.repeat(1,1,num_optima)).sum(dim=MCMC_DIM)#.div(posterior.n_active_models)
+        var = posterior.weighted_variance.repeat(1,num_optima)
         mixture_variance = BQBC + var
         sigma_1 = mixture_variance.repeat(n_models,1,1)
-        mu_1 = posterior.selected_mixture_mean.repeat(n_models,1,num_optima)
+        mu_1 = posterior.weighted_mixture_mean.repeat(n_models,1,num_optima)
         sigma_2 = tnorm_var
         mu_2 = tnorm_mean
         up = 2*torch.sqrt(sigma_1)*torch.sqrt(sigma_2)
@@ -558,7 +556,7 @@ class ScoreBOHellinger(AnalyticAcquisitionFunction):
         exped = torch.exp(-0.25*mean_up.div(down))
         right = sqrted* exped
         hellinger = 1 - right
-        return hellinger.mul(posterior.shaped_weights.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).sum(dim=-1)
+        return hellinger.mul(posterior.shaped_mask.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).sum(dim=-1)
         
 class ScoreBOWasserstein(AnalyticAcquisitionFunction):
     def __init__(
@@ -592,18 +590,18 @@ class ScoreBOWasserstein(AnalyticAcquisitionFunction):
                                                         X_test=X,
                                                         num_optima=num_optima)
 
-        mean_minus_mgpmean = tnorm_mean - posterior.selected_mixture_mean.unsqueeze(0).repeat(n_models,1,num_optima)
-        BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_mask.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).div(posterior.n_active_models)
-        var = posterior.selected_variance.repeat(1,num_optima)
+        mean_minus_mgpmean = posterior._mean.repeat(1,1,num_optima)  - posterior.selected_mixture_mean.unsqueeze(0).repeat(n_models,1,num_optima)
+        BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_weights.repeat(1,1,num_optima)).sum(dim=MCMC_DIM)#.div(posterior.n_active_models)
+        var = posterior.weighted_variance.repeat(1,num_optima)
         mixture_variance = BQBC + var
         sigma_1 = mixture_variance.repeat(n_models,1,1)
-        mu_1 = posterior.selected_mixture_mean.repeat(n_models,1,num_optima)
+        mu_1 = posterior.weighted_mixture_mean.repeat(n_models,1,num_optima)
         sigma_2 = tnorm_var
         mu_2 = tnorm_mean
         diff_means = mu_1-mu_2
         diff_stds = torch.sqrt(sigma_2) - torch.sqrt(sigma_1)
         wasserstein = torch.sqrt(diff_means.pow(2)+diff_stds.pow(2))
-        wasserstein = wasserstein.mul(posterior.shaped_weights.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).sum(dim=-1)
+        wasserstein = wasserstein.mul(posterior.shaped_mask.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).sum(dim=-1)
         return wasserstein
     
 
@@ -638,18 +636,18 @@ class ScoreBOKL(AnalyticAcquisitionFunction):
                                                         X_test=X,
                                                         num_optima=num_optima)
 
-        mean_minus_mgpmean = tnorm_mean - posterior.selected_mixture_mean.unsqueeze(0).repeat(n_models,1,num_optima)
-        BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_mask.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).div(posterior.n_active_models)
-        var = posterior.selected_variance.repeat(1,num_optima)
+        mean_minus_mgpmean = posterior._mean.repeat(1,1,num_optima) - posterior.selected_mixture_mean.unsqueeze(0).repeat(n_models,1,num_optima)
+        BQBC = mean_minus_mgpmean.pow(2).mul(posterior.shaped_weights.repeat(1,1,num_optima)).sum(dim=MCMC_DIM)#.div(posterior.n_active_models)
+        var = posterior.weighted_variance.repeat(1,num_optima)
         mixture_variance = BQBC + var
         sigma_1 = mixture_variance.repeat(n_models,1,1)
-        mu_1 = posterior.selected_mixture_mean.repeat(n_models,1,num_optima)
+        mu_1 = posterior.weighted_mixture_mean.repeat(n_models,1,num_optima)
         sigma_2 = tnorm_var
         mu_2 = tnorm_mean
         left = torch.log(torch.sqrt(sigma_2).div(torch.sqrt(sigma_1)))
         dif_means = mu_1-mu_2
         up = sigma_1 + dif_means.pow(2)
         KL = left + up.div(2*sigma_2) - 0.5
-        KL =KL.mul(posterior.shaped_weights.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).sum(dim=-1)
+        KL =KL.mul(posterior.shaped_mask.repeat(1,1,num_optima)).sum(dim=MCMC_DIM).sum(dim=-1)
         return KL
 

@@ -13,10 +13,10 @@ hydra:
     n_jobs: -1
   sweeper:
     params:
-      functions:  Gramacy1d, Higdon, Gramacy2d, Branin, Hartmann, Ishigami
+      functions:  BraninBO, Hartmann2dBO, Hartmann4dBO, Hartmann6dBO, Rosenbrock2dBO, Rosenbrock4dBO
       run: run_1, run_2, run_3, run_4, run_5, run_6, run_7, run_8, run_9, run_10
-      acquisition: BQBC, QBMGP, BALM, Random, SALHellingerMM, SALWassersteinMM, BALDKLMM, SALHL, SALWS, SALKL
+      acquisition: ScoreBOHellinger, ScoreBOWasserstein
       type: bayesian
-      task: AL
+      task: BO
 
       

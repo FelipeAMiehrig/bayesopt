@@ -586,7 +586,7 @@ class ScoreBOWasserstein(AnalyticAcquisitionFunction):
                                                         X_to_condition_complete=opt_inputs,
                                                         Y_to_condition_complete=opt_outputs,
                                                         X=self.model.train_inputs[0],
-                                                        Y=self.model.train_targets,
+                                                        Y=self.model.original_targets,
                                                         X_test=X,
                                                         num_optima=num_optima)
 
@@ -632,7 +632,7 @@ class ScoreBOKL(AnalyticAcquisitionFunction):
                                                         X_to_condition_complete=opt_inputs,
                                                         Y_to_condition_complete=opt_outputs,
                                                         X=self.model.train_inputs[0],
-                                                        Y=self.model.train_targets,
+                                                        Y=self.model.original_targets,
                                                         X_test=X,
                                                         num_optima=num_optima)
 

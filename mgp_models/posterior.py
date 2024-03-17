@@ -12,7 +12,7 @@ import numpy as np
 
 class WeightedGMPosterior(GaussianMixturePosterior):
 
-    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None, alpha: int = 1, quantile:int=75) -> None:
+    def __init__(self, distribution: MultivariateNormal, weights: Optional[Tensor] = None, ll: Optional[Tensor] = None, alpha: int = 1, quantile:int=50) -> None:
         super().__init__(distribution=distribution)
         if ll is not None:
             likelihoods = ll.detach().exp()
